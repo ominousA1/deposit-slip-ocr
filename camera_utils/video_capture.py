@@ -1,49 +1,50 @@
 import cv2
 import os
-from colorama import Fore
-import pytesseract 
-from pytesseract import Output
+import easyocr
 
-CAPTURE_URL = os.getenv("CAPTURE_URL", "0") 
+CAPTURE_URL = os.getenv("CAPTURE_URL", "0")  # Default to webcam
 
 class VideoCapture:
 
     def __init__(self):
         self.capture_url = int(CAPTURE_URL) if CAPTURE_URL.isdigit() else CAPTURE_URL
+        self.reader = easyocr.Reader(['en'], gpu=False)
 
     def start_capture(self):
         try:
-            cap = cap = cv2.VideoCapture(self.capture_url)
+            cap = cv2.VideoCapture(self.capture_url)
             if not cap.isOpened():
                 raise ValueError(f"Failed to open video source: {self.capture_url}")
         except Exception as e:
             print(f"Error initializing video capture: {e}")
             return
 
+        frame_count = 0
+        ocr_results = []
+
         while True:
             ret, frame = cap.read()
-
             if not ret:
                 print("Failed to grab frame")
                 break
 
-            
+            frame_count += 1
 
-            d = pytesseract.image_to_data(frame, output_type=Output.DICT)
-            n_boxes = len(d['text'])
-        
-            for i in range(n_boxes):
-                if int(d['conf'][i]) > 60:
-                    (text, x, y, w, h) = (d['text'][i], d['left'][i], d['top'][i], d['width'][i], d['height'][i])
-                    # don't show empty text
-                    if text and text.strip() != "":
-                        frame = cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                        frame = cv2.putText(frame, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 3)
+            if frame_count % 5 == 0:
+                ocr_results = self.reader.readtext(frame)
 
-            cv2.imshow("Video Feed", frame)
+            for (bbox, text, prob) in ocr_results:
+                if prob > 0.6:
+                    (tl, tr, br, bl) = bbox
+                    tl = tuple(map(int, tl))
+                    br = tuple(map(int, br))
+                    frame = cv2.rectangle(frame, tl, br, (0, 255, 0), 2)
+                    frame = cv2.putText(frame, text, (tl[0], tl[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+
+            cv2.imshow("Live OCR Feed", frame)
+
             if cv2.waitKey(1) & 0xFF == ord('q'):
-                print(Fore.GREEN + "Gracefully shutting down")
-                print(Fore.BLACK)
+                print("Exiting...")
                 break
 
         cap.release()
