@@ -1,3 +1,4 @@
 .ocr-venv
 camera_utils/__pycache__
 **/__pycache__/
+.env
